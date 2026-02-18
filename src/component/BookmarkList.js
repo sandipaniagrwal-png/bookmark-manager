@@ -7,47 +7,87 @@ export default function BookmarkList({ userId }) {
   const [deletingId, setDeletingId] = useState(null);
 
   useEffect(() => {
-  const handleNewBookmark = (event) => {
-    setBookmarks((prev) => [event.detail, ...prev]);
-  };
+    if (!userId) return;
 
-  window.addEventListener("bookmark-added", handleNewBookmark);
+    // 1️⃣ Fetch existing bookmarks
+    const fetchBookmarks = async () => {
+      const { data, error } = await supabase
+        .from("bookmarks")
+        .select("*")
+        .eq("user_id", userId)
+        .order("created_at", { ascending: false });
 
-  return () => {
-    window.removeEventListener("bookmark-added", handleNewBookmark);
-  };
-}, []);
+      if (!error) {
+        setBookmarks(data || []);
+      }
+    };
 
-  const fetchBookmarks = async () => {
-    const { data } = await supabase
-      .from("bookmarks")
-      .select("*")
-      .eq("user_id", userId)
-      .order("created_at", { ascending: false });
+    fetchBookmarks();
 
-    setBookmarks(data || []);
-  };
+    // 2️⃣ Realtime subscription
+    const channel = supabase
+      .channel(`bookmarks-${userId}`) // unique per user
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "bookmarks",
+          filter: `user_id=eq.${userId}`,
+        },
+        (payload) => {
+          console.log("Realtime event:", payload);
+
+          if (payload.eventType === "INSERT") {
+            setBookmarks((prev) => [payload.new, ...prev]);
+          }
+
+          if (payload.eventType === "DELETE") {
+            setBookmarks((prev) =>
+              prev.filter((b) => b.id !== payload.old.id)
+            );
+          }
+
+          if (payload.eventType === "UPDATE") {
+            setBookmarks((prev) =>
+              prev.map((b) =>
+                b.id === payload.new.id ? payload.new : b
+              )
+            );
+          }
+        }
+      )
+      .subscribe();
+
+    // 3️⃣ Cleanup on unmount or user change
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [userId]);
 
   const deleteBookmark = async (id) => {
-  setDeletingId(id);
+    setDeletingId(id);
 
-  // 1️⃣ Remove instantly from UI
-  setBookmarks((prev) => prev.filter((b) => b.id !== id));
+    const { error } = await supabase
+      .from("bookmarks")
+      .delete()
+      .eq("id", id);
 
-  // 2️⃣ Delete in background
-  await supabase.from("bookmarks").delete().eq("id", id);
+    if (error) {
+      console.error("Delete error:", error.message);
+    }
 
-  setDeletingId(null);
-};
-
+    setDeletingId(null);
+  };
 
   return (
-    <div className="bg-black shadow-md rounded-xl p-6 border">
-      {/* Heading */}
-      <h2 className="text-lg font-semibold mb-4">Bookmark List</h2>
+    <div className="bg-black shadow-md rounded-xl p-6 border border-gray-700">
+      <h2 className="text-lg font-semibold mb-4 text-white">
+        Bookmark List
+      </h2>
 
       {bookmarks.length === 0 ? (
-        <p className="text-gray-500 text-center">
+        <p className="text-gray-400 text-center">
           No bookmarks added yet.
         </p>
       ) : (
@@ -55,15 +95,17 @@ export default function BookmarkList({ userId }) {
           {bookmarks.map((bookmark) => (
             <div
               key={bookmark.id}
-              className="flex justify-between items-center border rounded-lg p-4"
+              className="flex justify-between items-center border border-gray-700 rounded-lg p-4"
             >
               <div>
-                <h3 className="font-semibold">{bookmark.title}</h3>
+                <h3 className="font-semibold text-white">
+                  {bookmark.title}
+                </h3>
                 <a
                   href={bookmark.url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-blue-600 text-sm hover:underline"
+                  className="text-blue-400 text-sm hover:underline"
                 >
                   {bookmark.url}
                 </a>
@@ -72,21 +114,16 @@ export default function BookmarkList({ userId }) {
               <button
                 onClick={() => deleteBookmark(bookmark.id)}
                 disabled={deletingId === bookmark.id}
-                className={`px-4 py-2 rounded-lg text-white transition 
-                  ${
-                    deletingId === bookmark.id
-                      ? "bg-red-400 cursor-not-allowed"
-                      : "bg-red-600 hover:bg-red-700 cursor-pointer"
-                  }`}
+                className={`px-4 py-2 rounded-lg text-white transition
+                ${
+                  deletingId === bookmark.id
+                    ? "bg-red-400 cursor-not-allowed"
+                    : "bg-red-600 hover:bg-red-700 cursor-pointer"
+                }`}
               >
-                {deletingId === bookmark.id ? (
-                  <span className="flex items-center gap-2">
-                    <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
-                    Deleting...
-                  </span>
-                ) : (
-                  "Delete"
-                )}
+                {deletingId === bookmark.id
+                  ? "Deleting..."
+                  : "Delete"}
               </button>
             </div>
           ))}

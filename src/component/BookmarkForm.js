@@ -8,46 +8,43 @@ export default function BookmarkForm({ userId }) {
   const [loading, setLoading] = useState(false);
 
   const addBookmark = async () => {
-  if (!title || !url) return;
+    if (!title.trim() || !url.trim()) return;
 
-  setLoading(true);
+    setLoading(true);
 
-  const formattedUrl = url.startsWith("http")
-    ? url
-    : `https://${url}`;
+    const formattedUrl = url.startsWith("http")
+      ? url
+      : `https://${url}`;
 
-  const tempBookmark = {
-    id: Date.now(), // temporary id
-    title,
-    url: formattedUrl,
-    user_id: userId,
-    created_at: new Date().toISOString(),
+    try {
+      const { error } = await supabase.from("bookmarks").insert([
+        {
+          title: title.trim(),
+          url: formattedUrl,
+          user_id: userId,
+        },
+      ]);
+
+      if (error) {
+        console.error("Insert error:", error.message);
+        return;
+      }
+
+      // Clear inputs only if insert successful
+      setTitle("");
+      setUrl("");
+    } catch (err) {
+      console.error("Unexpected error:", err);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  // 1️⃣ Immediately update UI
-  window.dispatchEvent(
-    new CustomEvent("bookmark-added", { detail: tempBookmark })
-  );
-
-  setTitle("");
-  setUrl("");
-
-  // 2️⃣ Insert into DB (background)
-  await supabase.from("bookmarks").insert([
-    {
-      title,
-      url: formattedUrl,
-      user_id: userId,
-    },
-  ]);
-
-  setLoading(false);
-};
-
-
   return (
-    <div className="bg-black shadow-md rounded-xl p-6 mb-6 border">
-      <h2 className="text-lg font-semibold mb-4">Add New Bookmark</h2>
+    <div className="bg-black shadow-md rounded-xl p-6 mb-6 border border-gray-700">
+      <h2 className="text-lg font-semibold mb-4 text-white">
+        Add New Bookmark
+      </h2>
 
       <div className="space-y-4">
         <input
@@ -55,7 +52,7 @@ export default function BookmarkForm({ userId }) {
           placeholder="Enter bookmark title"
           value={title}
           onChange={(e) => setTitle(e.target.value)}
-          className="w-full border rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="w-full border border-gray-700 bg-gray-900 text-white rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
         />
 
         <input
@@ -63,24 +60,24 @@ export default function BookmarkForm({ userId }) {
           placeholder="Enter website URL"
           value={url}
           onChange={(e) => setUrl(e.target.value)}
-          className="w-full border rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="w-full border border-gray-700 bg-gray-900 text-white rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
         />
 
         <button
           onClick={addBookmark}
           disabled={loading}
-          className={`w-full py-2 rounded-lg text-white transition 
+          className={`w-full py-2 rounded-lg text-white transition flex items-center justify-center gap-2
           ${
             loading
               ? "bg-blue-400 cursor-not-allowed"
-              : "bg-blue-600 hover:bg-blue-700 cursor-pointer"
+              : "bg-blue-600 hover:bg-blue-700 active:scale-95 cursor-pointer"
           }`}
         >
           {loading ? (
-            <span className="flex items-center justify-center gap-2">
+            <>
               <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
               Adding...
-            </span>
+            </>
           ) : (
             "Add Bookmark"
           )}
