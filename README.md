@@ -34,3 +34,52 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+
+---
+
+# Problems Faced & Solutions
+
+## 1. Google OAuth Issues in Production
+
+Problem: Login failed after deployment.
+Solution: Added Vercel URL in Supabase Auth settings and configured correct redirect URI in Google Cloud Console.
+
+---
+
+## 2. Realtime Not Syncing Across Tabs
+
+Problem: Bookmarks added in one tab didn’t appear in another.
+Solution:
+
+* Enabled replication for the `bookmarks` table in Supabase
+* Implemented proper `postgres_changes` subscription
+* Removed custom browser events
+
+---
+
+## 3. Delete Not Working
+
+Problem: Delete action failed silently.
+Solution: Added Row Level Security (RLS) DELETE policy:
+
+-sql
+
+auth.uid() = user_id;
+
+This ensures users can delete only their own bookmarks.
+
+---
+
+## 4. Environment Variables Missing on Vercel
+
+Problem: App crashed after deployment.
+Solution: Added required environment variables in Vercel dashboard and redeployed.
+
+---
+
+## Key Learnings
+
+* Security must be enforced using RLS policies.
+* Supabase Realtime requires replication enabled.
+* OAuth requires proper redirect configuration.
+* Production environments need separate environment variable setup.
